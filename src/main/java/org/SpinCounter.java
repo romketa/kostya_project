@@ -43,7 +43,12 @@ public class SpinCounter extends JFrame {
         createButton(buttonPanel, 4, "x50", "#C2BD00");
         createButton(buttonPanel, 5, "x1000", "#E61100");
 
-        JTable table = new JTable(tableModel);
+        JTable table = new JTable(tableModel) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // Make all cells uneditable
+            }
+        };
         JScrollPane tableScrollPane = new JScrollPane(table);
 
         add(buttonPanel, BorderLayout.NORTH);
