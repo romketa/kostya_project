@@ -4,6 +4,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,26 +12,29 @@ public class SpinCounter extends JFrame {
 
     private final JButton[] buttons;
     private final int buttonCount = 6;
-    private final Map<JButton, Integer> clickCounts;
-    private final DefaultTableModel tableModel;
-    private boolean hotkeysEnabled = true;
-    private final Map<JButton, KeyStroke> defaultHotkeys;
-    private final Map<JButton, Integer> undoCounts;
+    private final Map<JButton, Integer> currentSessionClickCounts;
+    private final Map<JButton, Integer> overallClickCounts;
+    private final DefaultTableModel tableModel1;
+    private final DefaultTableModel tableModel2;
     private JButton lastClickedButton = null;
     private boolean isMouseOver = false;
+    private boolean hotkeysEnabled = true;
 
     public SpinCounter() {
-        clickCounts = new HashMap<>();
-        undoCounts = new HashMap<>();
+        currentSessionClickCounts = new HashMap<>();
+        overallClickCounts = new HashMap<>();
         buttons = new JButton[buttonCount];
-        tableModel = new DefaultTableModel(new Object[]{"Multiplier", "Games"}, 0);
-        defaultHotkeys = new HashMap<>();
+        tableModel1 = new DefaultTableModel(new Object[]{"Multiplier", "Current Session", "Overall"}, 0);
+        tableModel2 = new DefaultTableModel(new Object[]{"", "Played", "Av. Multiplier"}, 0);
+        setAlwaysOnTop(true); // Set the program to always be on top
+        requestFocus(); // Request focus on the program window
+
         initUI();
         initKeyBindings();
     }
 
     private void initUI() {
-        setTitle("SpinCounter 0.0.4");
+        setTitle("SpinCounter 0.0.9");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
@@ -43,27 +47,42 @@ public class SpinCounter extends JFrame {
         createButton(buttonPanel, 4, "x50", "#C2BD00");
         createButton(buttonPanel, 5, "x1000", "#E61100");
 
-        JTable table = new JTable(tableModel) {
+        JTable table1 = new JTable(tableModel1) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false; // Make all cells uneditable
             }
         };
-        JScrollPane tableScrollPane = new JScrollPane(table);
+        JScrollPane tableScrollPane1 = new JScrollPane(table1);
+
+        JTable table2 = new JTable(tableModel2) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // Make all cells uneditable
+            }
+        };
+        JScrollPane tableScrollPane2 = new JScrollPane(table2);
+
+        JPanel tablesPanel = new JPanel();
+        tablesPanel.setLayout(new GridLayout(2, 1));
+        tablesPanel.add(tableScrollPane1);
+        tablesPanel.add(tableScrollPane2);
 
         add(buttonPanel, BorderLayout.NORTH);
-        add(tableScrollPane, BorderLayout.CENTER);
+        add(tablesPanel, BorderLayout.CENTER);
 
         JPanel actionPanel = new JPanel(new FlowLayout());
 
         JButton undoButton = new JButton("Undo Action");
         undoButton.addActionListener(e -> {
             if (lastClickedButton != null) {
-                int count = undoCounts.get(lastClickedButton);
-                if (count > 0) {
-                    clickCounts.put(lastClickedButton, count - 1);
-                    undoCounts.put(lastClickedButton, count - 1);
-                    updateTable();
+                int currentSessionCount = currentSessionClickCounts.get(lastClickedButton);
+                int overallCount = overallClickCounts.get(lastClickedButton);
+                if (currentSessionCount > 0) {
+                    currentSessionClickCounts.put(lastClickedButton, currentSessionCount - 1);
+                    overallClickCounts.put(lastClickedButton, overallCount - 1);
+                    updateTable1();
+                    updateTable2();
                 }
             }
         });
@@ -71,10 +90,10 @@ public class SpinCounter extends JFrame {
         JButton endSessionButton = new JButton("End Session");
         endSessionButton.addActionListener(e -> {
             for (JButton button : buttons) {
-                clickCounts.put(button, 0);
-                undoCounts.put(button, 0);
+                currentSessionClickCounts.put(button, 0);
             }
-            updateTable();
+            updateTable1();
+            updateTable2();
         });
 
         actionPanel.add(undoButton);
@@ -110,6 +129,7 @@ public class SpinCounter extends JFrame {
 
         pack();
         setLocationRelativeTo(null);
+
     }
 
     private void createButton(JPanel panel, int index, String label, String color) {
@@ -118,34 +138,30 @@ public class SpinCounter extends JFrame {
         buttons[index].setOpaque(true);
         buttons[index].setBorderPainted(false);
 
-        clickCounts.put(buttons[index], 0);
-        undoCounts.put(buttons[index], 0);
+        currentSessionClickCounts.put(buttons[index], 0);
+        overallClickCounts.put(buttons[index], 0);
 
         buttons[index].addActionListener(e -> {
             JButton button = buttons[index];
             lastClickedButton = button;
-            int count = clickCounts.get(button) + 1;
-            clickCounts.put(button, count);
-            undoCounts.put(button, count);
-            updateTable();
+            int currentSessionCount = currentSessionClickCounts.get(button) + 1;
+            int overallCount = overallClickCounts.get(button) + 1;
+            currentSessionClickCounts.put(button, currentSessionCount);
+            overallClickCounts.put(button, overallCount);
+            updateTable1();
+            updateTable2();
         });
 
         panel.add(buttons[index]);
     }
 
     private void initKeyBindings() {
-        defaultHotkeys.put(buttons[0], getDefaultHotkey(1)); // Default hotkey for Button 1
         updateHotkeyBindings();
     }
 
     private void updateHotkeyBindings() {
         for (int i = 0; i < buttonCount; i++) {
             JButton button = buttons[i];
-
-            KeyStroke keyStroke = defaultHotkeys.get(button);
-            if (keyStroke == null) {
-                keyStroke = getDefaultHotkey(i + 1);
-            }
 
             String actionName = "ClickButton" + (i + 1);
 
@@ -157,10 +173,10 @@ public class SpinCounter extends JFrame {
                     }
                 };
 
-                button.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(keyStroke, actionName);
+                button.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(getDefaultHotkey(i + 1), actionName);
                 button.getActionMap().put(actionName, action);
             } else {
-                button.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).remove(keyStroke);
+                button.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).remove(getDefaultHotkey(i + 1));
                 button.getActionMap().remove(actionName);
             }
         }
@@ -170,11 +186,56 @@ public class SpinCounter extends JFrame {
         return KeyStroke.getKeyStroke(Character.forDigit(number, 10), 0);
     }
 
-    private void updateTable() {
-        tableModel.setRowCount(0);
+    private void updateTable1() {
+        tableModel1.setRowCount(0);
         for (JButton button : buttons) {
-            int count = clickCounts.get(button);
-            tableModel.addRow(new Object[]{button.getText(), count});
+            int currentSessionCount = currentSessionClickCounts.get(button);
+            int overallCount = overallClickCounts.get(button);
+            tableModel1.addRow(new Object[]{button.getText(), currentSessionCount, overallCount});
+        }
+    }
+
+    private void updateTable2() {
+        int totalPlayedCurrentSession = 0;
+        int totalPlayedOverall = 0;
+        int totalMultiplierCurrentSession = 0;
+        int totalMultiplierOverall = 0;
+
+        for (JButton button : buttons) {
+            int currentSessionCount = currentSessionClickCounts.get(button);
+            int overallCount = overallClickCounts.get(button);
+            totalPlayedCurrentSession += currentSessionCount;
+            totalPlayedOverall += overallCount;
+
+            int multiplier = getMultiplier(button.getText());
+            totalMultiplierCurrentSession += currentSessionCount * multiplier;
+            totalMultiplierOverall += overallCount * multiplier;
+        }
+
+        double averageMultiplierCurrentSession = totalPlayedCurrentSession > 0 ? (double) totalMultiplierCurrentSession / totalPlayedCurrentSession : 0;
+        double averageMultiplierOverall = totalPlayedOverall > 0 ? (double) totalMultiplierOverall / totalPlayedOverall : 0;
+
+        tableModel2.setRowCount(0);
+        tableModel2.addRow(new Object[]{"Current Session", totalPlayedCurrentSession, String.format("%.3f", averageMultiplierCurrentSession)});
+        tableModel2.addRow(new Object[]{"Overall", totalPlayedOverall, String.format("%.3f", averageMultiplierOverall)});
+    }
+
+    private int getMultiplier(String buttonLabel) {
+        switch (buttonLabel) {
+            case "x2":
+                return 2;
+            case "x3":
+                return 3;
+            case "x5":
+                return 5;
+            case "x8":
+                return 8;
+            case "x50":
+                return 50;
+            case "x1000":
+                return 1000;
+            default:
+                return 0;
         }
     }
 
