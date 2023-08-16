@@ -14,7 +14,6 @@ public class SpinCounter extends JFrame {
     private final int buttonCount = 6;
     private final int newButtonCount = 4;
     private final Map<JButton, Integer> currentSessionClickCounts;
-    private final Map<JButton, Integer> overallClickCounts;
     private final DefaultTableModel tableModel1;
     private final DefaultTableModel tableModel2;
     private final DefaultTableModel tableModel3;
@@ -24,12 +23,12 @@ public class SpinCounter extends JFrame {
 
     public SpinCounter() {
         currentSessionClickCounts = new HashMap<>();
-        overallClickCounts = new HashMap<>();
+
         buttons = new JButton[buttonCount];
         newButtons = new JButton[newButtonCount];
-        tableModel1 = new DefaultTableModel(new Object[]{"Multiplier", "Current Session", "Overall"}, 0);
+        tableModel1 = new DefaultTableModel(new Object[]{"Multiplier", "Count"}, 0);
         tableModel2 = new DefaultTableModel(new Object[]{"", "Played", "Av. Multiplier", "All-in Luck"}, 0);
-        tableModel3 = new DefaultTableModel(new Object[]{"Button", "Current Session", "Overall"}, 0);
+        tableModel3 = new DefaultTableModel(new Object[]{"All-In Result", "Count"}, 0);
         initUI();
         initKeyBindings();
     }
@@ -99,10 +98,10 @@ public class SpinCounter extends JFrame {
         undoButton.addActionListener(e -> {
             if (lastClickedButton != null) {
                 int currentSessionCount = currentSessionClickCounts.get(lastClickedButton);
-                int overallCount = overallClickCounts.get(lastClickedButton);
+
                 if (currentSessionCount > 0) {
                     currentSessionClickCounts.put(lastClickedButton, currentSessionCount - 1);
-                    overallClickCounts.put(lastClickedButton, overallCount - 1);
+
                     updateTable1();
                     updateTable2();
                     updateTable3();
@@ -167,15 +166,15 @@ public class SpinCounter extends JFrame {
         buttons[index].setBorderPainted(false);
 
         currentSessionClickCounts.put(buttons[index], 0);
-        overallClickCounts.put(buttons[index], 0);
+
 
         buttons[index].addActionListener(e -> {
             JButton button = buttons[index];
             lastClickedButton = button;
             int currentSessionCount = currentSessionClickCounts.get(button) + 1;
-            int overallCount = overallClickCounts.get(button) + 1;
+
             currentSessionClickCounts.put(button, currentSessionCount);
-            overallClickCounts.put(button, overallCount);
+
             updateTable1();
             updateTable2();
             updateTable3();
@@ -188,15 +187,15 @@ public class SpinCounter extends JFrame {
         newButtons[index] = new JButton(label);
 
         currentSessionClickCounts.put(newButtons[index], 0);
-        overallClickCounts.put(newButtons[index], 0);
+
 
         newButtons[index].addActionListener(e -> {
             JButton button = newButtons[index];
             lastClickedButton = button;
             int currentSessionCount = currentSessionClickCounts.get(button) + 1;
-            int overallCount = overallClickCounts.get(button) + 1;
+
             currentSessionClickCounts.put(button, currentSessionCount);
-            overallClickCounts.put(button, overallCount);
+            updateTable2();
             updateTable3();
         });
 
@@ -237,42 +236,73 @@ public class SpinCounter extends JFrame {
         tableModel1.setRowCount(0);
         for (JButton button : buttons) {
             int currentSessionCount = currentSessionClickCounts.get(button);
-            int overallCount = overallClickCounts.get(button);
-            tableModel1.addRow(new Object[]{button.getText(), currentSessionCount, overallCount});
+
+            tableModel1.addRow(new Object[]{button.getText(), currentSessionCount});
         }
     }
 
     private void updateTable2() {
         int totalPlayedCurrentSession = 0;
-        int totalPlayedOverall = 0;
-        int totalMultiplierCurrentSession = 0;
-        int totalMultiplierOverall = 0;
 
+        int totalMultiplierCurrentSession = 0;
+
+
+
+        // Count clicks on +EV and won/-EV and lost buttons
         for (JButton button : buttons) {
             int currentSessionCount = currentSessionClickCounts.get(button);
-            int overallCount = overallClickCounts.get(button);
+
             totalPlayedCurrentSession += currentSessionCount;
-            totalPlayedOverall += overallCount;
+
 
             int multiplier = getMultiplier(button.getText());
             totalMultiplierCurrentSession += currentSessionCount * multiplier;
-            totalMultiplierOverall += overallCount * multiplier;
+
+
+
         }
 
+        // Count clicks on new buttons
+        int plusEvAndWonCount = currentSessionClickCounts.get(newButtons[3]);
+        int plusEvAndLostCount = currentSessionClickCounts.get(newButtons[2]);
+        int minusEvAndLostCount = currentSessionClickCounts.get(newButtons[0]);
+        int minusEvAndWonCount = currentSessionClickCounts.get(newButtons[1]);
+
         double averageMultiplierCurrentSession = totalPlayedCurrentSession > 0 ? (double) totalMultiplierCurrentSession / totalPlayedCurrentSession : 0;
-        double averageMultiplierOverall = totalPlayedOverall > 0 ? (double) totalMultiplierOverall / totalPlayedOverall : 0;
+
+
+        // Calculate All-in Luck in Overall
+        double allInLuckOverall = calculateAllInLuck(plusEvAndWonCount, plusEvAndLostCount, minusEvAndWonCount, minusEvAndLostCount);
 
         tableModel2.setRowCount(0);
-        tableModel2.addRow(new Object[]{"Current Session", totalPlayedCurrentSession, String.format("%.3f", averageMultiplierCurrentSession), ""});
-        tableModel2.addRow(new Object[]{"Overall", totalPlayedOverall, String.format("%.3f", averageMultiplierOverall), ""});
+        tableModel2.addRow(new Object[]{"Count", totalPlayedCurrentSession, String.format("%.3f", averageMultiplierCurrentSession), String.format("%.2f", allInLuckOverall)});
+
+
     }
+
+    private double calculateAllInLuck(int plusEvAndWon, int plusEvAndLost, int minusEvAndWon, int minusEvAndLost) {
+        int numerator = plusEvAndWon - minusEvAndLost + minusEvAndWon - plusEvAndLost;
+        int denominator =  plusEvAndWon + minusEvAndLost + minusEvAndWon + plusEvAndLost;
+
+        if (denominator != 0) {
+            return (double) numerator * 100 / denominator;
+        } else {
+            return 0;
+        }
+    }
+
+
+
+
+
+
 
     private void updateTable3() {
         tableModel3.setRowCount(0);
         for (JButton button : newButtons) {
             int currentSessionCount = currentSessionClickCounts.get(button);
-            int overallCount = overallClickCounts.get(button);
-            tableModel3.addRow(new Object[]{button.getText(), currentSessionCount, overallCount});
+
+            tableModel3.addRow(new Object[]{button.getText(), currentSessionCount});
         }
     }
 
